@@ -1,0 +1,18 @@
+[project]
+name = "healthy-bot"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram>=3.20.0",
+    "asyncio>=3.4.3",
+    "python-dotenv>=1.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "pytest>=8.3.5",
+    "ruff>=0.11.5",
+]
