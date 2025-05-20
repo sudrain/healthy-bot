@@ -19,6 +19,7 @@ class AdminLoggingMiddleware(BaseMiddleware):
         if event.from_user.id in ADMINS_IDS:
             logger.info(
                 f"Admin action: {event.from_user.full_name} (ID: {event.from_user.id})\n"
+                f"TypeContent: {event.content_type}\n"
                 f"Command: {event.text}"
             )
 
