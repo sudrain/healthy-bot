@@ -1,4 +1,4 @@
-line-length = 85
+line-length = 100
 
 [lint.per-file-ignores]
   # init modules can contain the local imports, logic, unused imports
