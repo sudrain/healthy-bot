@@ -2,7 +2,7 @@ install:
 	uv sync
 
 run:
-	uv run hexlet-python-package
+	uv run fitness-bot/bot.py
 
 test:
 	uv run pytest

@@ -6,12 +6,14 @@ from os import getenv
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from dotenv import load_dotenv
 from handlers.admin_handlers import admin_router
 from handlers.user_handlers import user_router
 from handlers.workout_handlers import workout_router
 from middlewares.admin_logger import AdminLoggingMiddleware
 
 # Bot token can be obtained via https://t.me/BotFather
+load_dotenv()
 TOKEN = getenv("BOT_TOKEN")
 
 # All handlers should be attached to the Router (or Dispatcher)
