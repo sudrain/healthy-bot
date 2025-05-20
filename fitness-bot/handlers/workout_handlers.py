@@ -57,7 +57,8 @@ async def process_date(message: types.Message, state: FSMContext):
         f"Дата: {message.text}",
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text="Подтвердить", callback_data="confirm")]
+                [types.InlineKeyboardButton(text="Подтвердить", callback_data="confirm")],
+                [types.InlineKeyboardButton(text="Отмена", callback_data="cancel")],
             ]
         ),
     )
@@ -71,6 +72,12 @@ async def save_workout(callback: types.CallbackQuery, state: FSMContext):
     # Добавим БД позже
     # data = await state.get_data()
     await callback.message.answer("✅ Данные сохранены!")
+    await state.clear()
+
+
+@workout_router.callback_query(F.data == "cancel", WorkoutForm.confirm_data)
+async def cancel_registration(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.answer("❌ Ввод прерван")
     await state.clear()
 
 
