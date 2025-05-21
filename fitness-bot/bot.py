@@ -9,6 +9,7 @@ from aiogram.enums import ParseMode
 from database.core import create_pool
 from dotenv import load_dotenv
 from handlers.admin_handlers import admin_router
+from handlers.analitics_handlers import analytics_router
 from handlers.user_handlers import user_router
 from handlers.workout_handlers import workout_router
 from middlewares.admin_logger import AdminLoggingMiddleware
@@ -27,7 +28,7 @@ logging.basicConfig(
 
 
 dp = Dispatcher()
-dp.include_routers(admin_router, workout_router, user_router)
+dp.include_routers(admin_router, workout_router, analytics_router, user_router)
 dp.message.middleware.register(AdminLoggingMiddleware())
 
 
