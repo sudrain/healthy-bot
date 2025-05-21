@@ -1,7 +1,13 @@
+import logging
+from datetime import datetime
+
+import asyncpg
 from aiogram import F, Router, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from states import WorkoutForm
+
+logger = logging.getLogger(__name__)
 
 workout_router = Router()
 
@@ -46,9 +52,14 @@ async def procces_duration(message: types.Message, state: FSMContext):
 # Обработка Даты и подтверждение
 @workout_router.message(WorkoutForm.enter_date)
 async def process_date(message: types.Message, state: FSMContext):
-    """
-    Тут нужно добавить валидацию даты либо добавить автодату в sql
-    """
+    try:
+        # Преобразуем строку в объект date
+        date_obj = datetime.strptime(message.text, "%d.%m.%Y").date()
+    except ValueError:
+        await message.answer("❌ Неверный формат даты! Используйте ДД.ММ.ГГГГ")
+        return
+
+    await state.update_data(date=date_obj)  # Сохраняем объект date, а не строку
     data = await state.get_data()
     await message.answer(
         f"Проверьте данные:\n"
@@ -62,17 +73,52 @@ async def process_date(message: types.Message, state: FSMContext):
             ]
         ),
     )
-    await state.update_data(date=message.text)
     await state.set_state(WorkoutForm.confirm_data)
 
 
 # Сохранение данных
 @workout_router.callback_query(F.data == "confirm", WorkoutForm.confirm_data)
-async def save_workout(callback: types.CallbackQuery, state: FSMContext):
-    # Добавим БД позже
-    # data = await state.get_data()
-    await callback.message.answer("✅ Данные сохранены!")
-    await state.clear()
+async def save_workout(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    pool: asyncpg.Pool,  # Получаем pool из контекста
+):
+    data = await state.get_data()
+
+    try:
+        async with pool.acquire() as conn:  # Получаем соединение из пула
+            async with conn.transaction():  # Явное начало транзакции
+                # Сохраняем пользователя
+                await conn.execute(
+                    """
+                    INSERT INTO users (id, username, full_name)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (id) DO NOTHING
+                """,
+                    callback.from_user.id,
+                    callback.from_user.username,
+                    callback.from_user.full_name,
+                )
+
+                # Сохраняем тренировку
+                await conn.execute(
+                    """
+                    INSERT INTO workouts (user_id, type, duration, date)
+                    VALUES ($1, $2, $3, $4)
+                """,
+                    callback.from_user.id,
+                    data["workout_type"],
+                    data["duration"],
+                    data["date"],
+                )
+
+    except Exception as e:
+        await callback.message.answer(f"❌ Ошибка сохранения: {str(e)}")
+        logger.error(f"Database error: {str(e)}")
+    else:
+        await callback.message.answer("✅ Данные успешно сохранены!")
+    finally:
+        await state.clear()
 
 
 @workout_router.callback_query(F.data == "cancel", WorkoutForm.confirm_data)

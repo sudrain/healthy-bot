@@ -6,17 +6,25 @@ from os import getenv
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from database.core import create_pool
 from dotenv import load_dotenv
 from handlers.admin_handlers import admin_router
 from handlers.user_handlers import user_router
 from handlers.workout_handlers import workout_router
 from middlewares.admin_logger import AdminLoggingMiddleware
 
-# Bot token can be obtained via https://t.me/BotFather
 load_dotenv()
 TOKEN = getenv("BOT_TOKEN")
 
-# All handlers should be attached to the Router (or Dispatcher)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("bot.log"),  # Логи в файл
+        logging.StreamHandler(),  # Логи в консоль
+    ],
+)
+
 
 dp = Dispatcher()
 dp.include_routers(admin_router, workout_router, user_router)
@@ -24,10 +32,10 @@ dp.message.middleware.register(AdminLoggingMiddleware())
 
 
 async def main() -> None:
-    # Initialize Bot instance with default bot properties which will be passed to all API calls
+    pool = await create_pool()
+    dp["pool"] = pool
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
-    # And the run events dispatching
     await dp.start_polling(bot)
 
 
