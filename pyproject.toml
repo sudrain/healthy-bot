@@ -1,5 +1,5 @@
 [project]
-name = "healthy-bot"
+name = "fitness_bot"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -18,6 +18,7 @@ dev = [
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
     "pytest-cov>=6.1.1",
+    "pytest-mock>=3.14.0",
     "ruff>=0.11.5",
 ]
 
@@ -25,3 +26,4 @@ dev = [
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
+pythonpath = ["fitness_bot"]
