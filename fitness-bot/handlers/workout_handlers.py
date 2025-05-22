@@ -1,93 +1,137 @@
-from datetime import datetime
-
 import asyncpg
 from aiogram import F, Router, types
-from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from keyboards import main_menu
+from database.crud import create_cardio_session, create_user, create_workout
+from keyboards import keyboards
 from states import WorkoutForm
 
 workout_router = Router()
 
 
-@workout_router.message(WorkoutForm.select_workout_type)
-async def process_workout_type(message: types.Message, state: FSMContext):
-    await state.update_data(workout_type=message.text)
+@workout_router.message(F.text == "➕ Добавить тренировку")
+async def start_workout(message: types.Message, state: FSMContext):
+    await state.set_state(WorkoutForm.select_workout_type)
+    markup = await keyboards.get_type_exercises()
+    await message.answer("Выберите тип тренировки:", reply_markup=markup)
+
+
+# Cardio Handlers
+@workout_router.message(WorkoutForm.select_workout_type, F.text == "Кардио")
+async def select_cardio_exercise(message: types.Message, state: FSMContext, pool: asyncpg.Pool):
+    await state.update_data(workout_type="cardio")
+    markup = await keyboards.get_cardio_exercises(pool)
+    await message.answer("🏃 Выберите упражнение:", reply_markup=markup)
+    await state.set_state(WorkoutForm.select_cardio_exercise)
+
+
+@workout_router.message(WorkoutForm.select_cardio_exercise)
+async def process_cardio_exercise(message: types.Message, state: FSMContext, pool: asyncpg.Pool):
+    async with pool.acquire() as conn:
+        exercise = await conn.fetchrow(
+            "SELECT id FROM exercise_types WHERE name = $1 AND category = 'cardio'", message.text
+        )
+
+    if not exercise:
+        await message.answer("❌ Упражнение не найдено!")
+        return
+
+    await state.update_data(exercise_id=exercise["id"])
     await message.answer(
-        "Введите продолжительность (в минутах):", reply_markup=types.ReplyKeyboardRemove()
+        "⏱ Введите продолжительность (минуты):", reply_markup=keyboards.cancel_button()
     )
-    await state.set_state(WorkoutForm.enter_duration)
+    await state.set_state(WorkoutForm.cardio_duration)
 
 
-@workout_router.message(WorkoutForm.enter_duration)
-async def process_duration(message: types.Message, state: FSMContext):
+@workout_router.message(WorkoutForm.cardio_duration)
+async def process_cardio_duration(message: types.Message, state: FSMContext):
     if not message.text.isdigit():
-        await message.answer("Введите число!")
+        await message.answer("❌ Введите целое число минут!")
         return
 
     await state.update_data(duration=int(message.text))
-    await message.answer("Введите дату тренировки (ДД.ММ.ГГГГ):")
-    await state.set_state(WorkoutForm.enter_date)
+    await message.answer("📏 Введите расстояние (км):")
+    await state.set_state(WorkoutForm.cardio_distance)
 
 
-@workout_router.message(WorkoutForm.enter_date)
-async def process_date(message: types.Message, state: FSMContext):
+@workout_router.message(WorkoutForm.cardio_distance)
+async def process_cardio_distance(message: types.Message, state: FSMContext):
     try:
-        date_obj = datetime.strptime(message.text, "%d.%m.%Y").date()
+        distance = float(message.text.replace(",", "."))
+        if distance <= 0:
+            raise ValueError
     except ValueError:
-        await message.answer("❌ Неверный формат даты! Используйте ДД.ММ.ГГГГ")
+        await message.answer("❌ Некорректное значение! Пример: 5.3")
         return
 
-    await state.update_data(date=date_obj)
-    data = await state.get_data()
-
-    markup = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [types.InlineKeyboardButton(text="Подтвердить", callback_data="confirm")],
-            [types.InlineKeyboardButton(text="Отмена", callback_data="cancel")],
-        ]
-    )
-
-    await message.answer(
-        f"Проверьте данные:\nТип: {data['workout_type']}\n"
-        f"Длительность: {data['duration']} мин\n"
-        f"Дата: {message.text}",
-        reply_markup=markup,
-    )
-    await state.set_state(WorkoutForm.confirm_data)
+    await state.update_data(distance=distance)
+    await message.answer("📈 Введите среднюю скорость:", reply_markup=keyboards.speed_keyboard())
+    await state.set_state(WorkoutForm.cardio_avg_speed)
 
 
-@workout_router.callback_query(F.data == "confirm", WorkoutForm.confirm_data)
-async def save_workout(callback: types.CallbackQuery, state: FSMContext, pool: asyncpg.Pool):
-    data = await state.get_data()
-
+@workout_router.message(WorkoutForm.cardio_avg_speed)
+async def process_cardio_speed(message: types.Message, state: FSMContext):
     try:
-        async with pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO users (id, username, full_name) VALUES ($1, $2, $3) "
-                "ON CONFLICT (id) DO NOTHING",
-                callback.from_user.id,
-                callback.from_user.username,
-                callback.from_user.full_name,
-            )
-            await conn.execute(
-                "INSERT INTO workouts (user_id, type, duration, date) VALUES ($1, $2, $3, $4)",
-                callback.from_user.id,
-                data["workout_type"],
+        speed = float(message.text.replace(",", "."))
+        if speed <= 0 or speed > 30:  # Проверка на реалистичность
+            raise ValueError
+    except ValueError:
+        await message.answer("❌ Некорректное значение! Пример: 9.5")
+        return
+
+    await state.update_data(avg_speed=speed)
+    await message.answer("❤️ Введите средний пульс:")
+    await state.set_state(WorkoutForm.cardio_heart_rate)
+
+
+@workout_router.message(WorkoutForm.cardio_heart_rate)
+async def process_cardio_heart_rate(message: types.Message, state: FSMContext):
+    if not message.text.isdigit():
+        await message.answer("❌ Введите число ударов в минуту!")
+        return
+
+    await state.update_data(avg_heart_rate=int(message.text))
+    await message.answer("⏳ Введите время отдыха после упражнения (минуты):")
+    await state.set_state(WorkoutForm.cardio_rest)
+
+
+@workout_router.message(WorkoutForm.cardio_rest)
+async def process_cardio_rest(message: types.Message, state: FSMContext, pool: asyncpg.Pool):
+    data = await state.get_data()
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Создаем/обновляем пользователя
+            await create_user(conn, message.from_user)
+
+            # Создаем тренировку
+            workout_id = await create_workout(conn, message.from_user.id, "cardio")
+
+            # Сохраняем кардио-сессию
+            await create_cardio_session(
+                conn,
+                workout_id,
+                data["exercise_id"],
                 data["duration"],
-                data["date"],
+                data["distance"],
+                data["avg_speed"],
+                data["avg_heart_rate"],
+                int(message.text),
             )
-        await callback.message.answer("✅ Данные сохранены!", reply_markup=main_menu())
 
-    except Exception as e:
-        await callback.message.answer(f"❌ Ошибка сохранения: {str(e)}")
-        # logger.error(f"Database error: {str(e)}")
-
+    await message.answer("✅ Кардио-тренировка сохранена!")
     await state.clear()
 
 
-@workout_router.callback_query(F.data == "cancel")
-@workout_router.message(Command("cancel"))
-async def cancel_registration(message: types.Message, state: FSMContext):
+# Strength Handlers (аналогичная логика)
+@workout_router.message(WorkoutForm.select_workout_type, F.text == "Силовая")
+async def select_strength_exercise(message: types.Message, state: FSMContext, pool: asyncpg.Pool):
+    await state.update_data(workout_type="strength")
+    markup = await keyboards.get_strength_exercises(pool)
+    await message.answer("🏋️ Выберите упражнение:", reply_markup=markup)
+    await state.set_state(WorkoutForm.select_strength_exercise)
+
+
+@workout_router.message(F.text == "❌ Отмена")
+async def cancel_process(message: types.Message, state: FSMContext):
+    await message.anser("Тренировка отменена ❌")
     await state.clear()
-    await message.answer("❌ Действие отменено", reply_markup=main_menu())
