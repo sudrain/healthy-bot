@@ -1,7 +1,12 @@
 import asyncpg
 from aiogram import F, Router, types
 from aiogram.fsm.context import FSMContext
-from database.crud import create_cardio_session, create_user, create_workout
+from database.crud import (
+    create_cardio_session,
+    create_strength_session,
+    create_user,
+    create_workout,
+)
 from keyboards import keyboards
 from states import WorkoutForm
 
@@ -131,7 +136,65 @@ async def select_strength_exercise(message: types.Message, state: FSMContext, po
     await state.set_state(WorkoutForm.select_strength_exercise)
 
 
-@workout_router.message(F.text == "❌ Отмена")
-async def cancel_process(message: types.Message, state: FSMContext):
-    await message.anser("Тренировка отменена ❌")
+@workout_router.message(WorkoutForm.select_strength_exercise)
+async def process_strength_exercise(message: types.Message, state: FSMContext, pool: asyncpg.Pool):
+    async with pool.acquire() as conn:
+        exercise = await conn.fetchrow(
+            "SELECT id FROM exercise_types WHERE name = $1 AND category = 'strength'", message.text
+        )
+
+    if not exercise:
+        await message.answer("❌ Упражнение не найдено!")
+        return
+
+    await state.update_data(exercise_id=exercise["id"])
+    await message.answer("Введите кол-во повторений:", reply_markup=keyboards.cancel_button())
+    await state.set_state(WorkoutForm.strength_reps)
+
+
+@workout_router.message(WorkoutForm.strength_reps)
+async def process_strength_reps(message: types.Message, state: FSMContext):
+    if not message.text.isdigit():
+        await message.answer("❌ Введите целое число повторений!")
+        return
+
+    await state.update_data(reps=int(message.text))
+    await message.answer("Введите вес (в кг):")
+    await state.set_state(WorkoutForm.strength_weight)
+
+
+@workout_router.message(WorkoutForm.strength_weight)
+async def process_strength_weight(message: types.Message, state: FSMContext):
+    if not message.text.isdigit():
+        await message.answer("❌ Введите целое число!")
+        return
+
+    await state.update_data(weight=float(message.text))
+    await message.answer("⏳ Введите время отдыха после упражнения (минуты):")
+    await state.set_state(WorkoutForm.strength_rest)
+
+
+@workout_router.message(WorkoutForm.strength_rest)
+async def process_strength_rest(message: types.Message, state: FSMContext, pool: asyncpg.Pool):
+    data = await state.get_data()
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Создаем/обновляем пользователя
+            await create_user(conn, message.from_user)
+
+            # Создаем тренировку
+            workout_id = await create_workout(conn, message.from_user.id, "strength")
+
+            # Сохраняем силовую-сессию
+            await create_strength_session(
+                conn,
+                workout_id,
+                data["exercise_id"],
+                data["reps"],
+                data["weight"],
+                int(message.text),
+            )
+
+    await message.answer("✅ Силовая-тренировка сохранена!")
     await state.clear()

@@ -49,3 +49,23 @@ async def create_cardio_session(
         heart_rate,
         rest_time,
     )
+
+
+async def create_strength_session(
+    conn: asyncpg.Connection,
+    workout_id: int,
+    exercise_id: int,
+    reps: int,
+    weight: float,
+    rest_time: int,
+) -> None:
+    await conn.execute(
+        """INSERT INTO strength_sessions
+        (workout_id, exercise_type_id, reps, weight, rest_time)
+        VALUES ($1, $2, $3, $4, $5)""",
+        workout_id,
+        exercise_id,
+        reps,
+        weight,
+        rest_time,
+    )

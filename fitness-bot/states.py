@@ -14,7 +14,6 @@ class WorkoutForm(StatesGroup):
 
     # Strength
     select_strength_exercise = State()
-    strength_weight = State()
     strength_reps = State()
-    strength_sets = State()
+    strength_weight = State()
     strength_rest = State()
