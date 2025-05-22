@@ -1,7 +1,7 @@
 import asyncpg
 from aiogram import F, Router, types
 from aiogram.filters import Command
-from keyboards import main_menu
+from keyboards.keyboards import main_menu
 
 analytics_router = Router()
 
