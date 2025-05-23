@@ -17,3 +17,5 @@ class WorkoutForm(StatesGroup):
     strength_reps = State()
     strength_weight = State()
     strength_rest = State()
+
+    confirm_data = State()
