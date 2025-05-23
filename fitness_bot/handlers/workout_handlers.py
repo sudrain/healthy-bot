@@ -1,7 +1,7 @@
 import asyncpg
 from aiogram import F, Router, types
 from aiogram.fsm.context import FSMContext
-from aiogram.types import ReplyKeyboardRemove
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 from database.crud import (
     create_cardio_session,
     create_strength_session,
@@ -127,34 +127,6 @@ async def process_cardio_heart_rate(message: types.Message, state: FSMContext):
     await state.set_state(WorkoutForm.cardio_rest)
 
 
-@workout_router.message(WorkoutForm.cardio_rest)
-async def process_cardio_rest(message: types.Message, state: FSMContext, pool: asyncpg.Pool):
-    data = await state.get_data()
-
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            # Создаем/обновляем пользователя
-            await create_user(conn, message.from_user)
-
-            # Создаем тренировку
-            workout_id = await create_workout(conn, message.from_user.id, "cardio")
-
-            # Сохраняем кардио-сессию
-            await create_cardio_session(
-                conn,
-                workout_id,
-                data["exercise_id"],
-                data["duration"],
-                data["distance"],
-                data["avg_speed"],
-                data["avg_heart_rate"],
-                int(message.text),
-            )
-
-    await message.answer("✅ Кардио-тренировка сохранена!")
-    await state.clear()
-
-
 # ------------------------------------
 #    Обработчики силовой тренировки
 # ------------------------------------
@@ -208,30 +180,86 @@ async def process_strength_weight(message: types.Message, state: FSMContext):
     await state.set_state(WorkoutForm.strength_rest)
 
 
+# ----------------------------------------
+#    Общий обработчик отдыха(переделать)
+# ----------------------------------------
+@workout_router.message(WorkoutForm.cardio_rest)
 @workout_router.message(WorkoutForm.strength_rest)
-async def process_strength_rest(message: types.Message, state: FSMContext, pool: asyncpg.Pool):
+async def process_rest_time(message: types.Message, state: FSMContext, pool: asyncpg.Pool):
     data = await state.get_data()
+    await state.update_data(rest_time=int(message.text))
 
+    # Получаем название упражнения из БД
     async with pool.acquire() as conn:
-        async with conn.transaction():
-            # Создаем/обновляем пользователя
-            await create_user(conn, message.from_user)
+        exercise_name = await conn.fetchval(
+            "SELECT name FROM exercise_types WHERE id = $1", data["exercise_id"]
+        )
 
-            # Создаем тренировку
-            workout_id = await create_workout(conn, message.from_user.id, "strength")
+    await state.update_data(exercise_name=exercise_name)
 
-            # Сохраняем силовую сессию
-            await create_strength_session(
-                conn,
-                workout_id,
-                data["exercise_id"],
-                data["reps"],
-                data["weight"],
-                int(message.text),
-            )
+    # Формируем клавиатуру подтверждения
+    confirm_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Подтвердить", callback_data="confirm")],
+            [InlineKeyboardButton(text="❌ Отменить", callback_data="cancel")],
+        ]
+    )
 
-    await message.answer("✅ Силовая-тренировка сохранена!")
-    await state.clear()
+    formatted_data = await format_workout_data(await state.get_data())
+    await message.answer(formatted_data, reply_markup=confirm_keyboard)
+    await state.set_state(WorkoutForm.confirm_data)
+
+
+@workout_router.callback_query(WorkoutForm.confirm_data, F.data.in_(["confirm", "cancel"]))
+async def handle_confirmation(callback: types.CallbackQuery, state: FSMContext, pool: asyncpg.Pool):
+    try:
+        if callback.data == "confirm":
+            data = await state.get_data()
+
+            async with pool.acquire() as conn:
+                async with conn.transaction():  # Общая транзакция
+                    # Создаем/обновляем пользователя
+                    await create_user(conn, callback.from_user)
+
+                    # Создаем тренировку
+                    workout_id = await create_workout(
+                        conn=conn, user_id=callback.from_user.id, workout_type=data["workout_type"]
+                    )
+
+                    # Сохраняем данные в соответствующую таблицу
+                    if data["workout_type"] == "cardio":
+                        await create_cardio_session(
+                            conn=conn,
+                            workout_id=workout_id,
+                            exercise_id=data["exercise_id"],
+                            duration=data["duration"],
+                            distance=data["distance"],
+                            avg_speed=data["avg_speed"],
+                            heart_rate=data["avg_heart_rate"],
+                            rest_time=data["rest_time"],  # Брать из data, а не message.text
+                        )
+                    else:
+                        await create_strength_session(  # Исправлено на strength
+                            conn=conn,
+                            workout_id=workout_id,
+                            exercise_id=data["exercise_id"],
+                            reps=data["reps"],
+                            weight=data["weight"],
+                            rest_time=data["rest_time"],
+                        )
+
+            await callback.message.answer("✅ Данные успешно сохранены!")
+        else:
+            await callback.message.answer("❌ Тренировка отменена")
+
+    except Exception as e:
+        # logger.error(f"Ошибка сохранения: {str(e)}", exc_info=True)
+        await callback.message.answer(f"⚠️ Произошла ошибка при сохранении. Попробуйте снова.({e})")
+
+    finally:
+        await state.clear()
+        await callback.message.answer("Главное меню:", reply_markup=keyboards.main_menu())
+        await callback.answer()
 
 
 async def format_workout_data(data: dict) -> str:

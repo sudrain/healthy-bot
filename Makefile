@@ -2,7 +2,7 @@ install:
 	uv sync
 
 run:
-	uv run fitness_bot/bot.py
+	uv run fitness_bot/main.py
 
 test:
 	uv run pytest
