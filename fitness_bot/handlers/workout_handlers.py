@@ -32,6 +32,17 @@ async def cancel_handler(message: types.Message, state: FSMContext):
     await cancel_operation(message, state)
 
 
+# --------------------------------------------
+#    Общий обработчик пропуска(добавляет 0)
+# --------------------------------------------
+
+
+# @workout_router.message(F.text.lower() == "пропустить")
+# async def pass_handler(message: types.Message, state: FSMContext):
+#     current_state = await state.get_state()
+#     await
+
+
 # -----------------------------------
 #   Начало добавления тренировки
 # -----------------------------------

@@ -17,6 +17,12 @@ def cancel_button() -> ReplyKeyboardMarkup:
     return builder.as_markup(resize_keyboard=True)
 
 
+def pass_button() -> ReplyKeyboardMarkup:
+    builder = ReplyKeyboardBuilder()
+    builder.button(text="Пропустить")
+    return builder.as_markup(resize_keyboard=True)
+
+
 async def get_type_exercises() -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
     builder.button(text="Кардио")
