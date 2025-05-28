@@ -1,6 +1,6 @@
 import asyncpg
-from aiogram.types import ReplyKeyboardMarkup
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 
 def main_menu() -> ReplyKeyboardMarkup:
@@ -11,63 +11,73 @@ def main_menu() -> ReplyKeyboardMarkup:
     return builder.as_markup(resize_keyboard=True, input_field_placeholder="Выберите действие")
 
 
-def cancel_button() -> ReplyKeyboardMarkup:
-    builder = ReplyKeyboardBuilder()
-    builder.button(text="❌ Отмена")
-    return builder.as_markup(resize_keyboard=True)
-
-
-def pass_button() -> ReplyKeyboardMarkup:
-    builder = ReplyKeyboardBuilder()
-    builder.button(text="Пропустить")
-    return builder.as_markup(resize_keyboard=True)
-
-
-async def get_type_exercises() -> ReplyKeyboardMarkup:
-    builder = ReplyKeyboardBuilder()
-    builder.button(text="Кардио")
-    builder.button(text="Силовая")
-    builder.button(text="❌ Отмена")
+async def get_workout_type_kb() -> InlineKeyboardMarkup:
+    """Клавиатура выбора типа тренировки"""
+    builder = InlineKeyboardBuilder()
+    builder.add(
+        InlineKeyboardButton(text="🏃 Кардио", callback_data="workout_type:cardio"),
+        InlineKeyboardButton(text="🏋️ Силовая", callback_data="workout_type:strength"),
+        InlineKeyboardButton(text="❌ Отмена", callback_data="cancel"),
+    )
     builder.adjust(2)
-    return builder.as_markup(resize_keyboard=True)
+    return builder.as_markup()
 
 
-async def get_cardio_exercises(pool: asyncpg.Pool) -> ReplyKeyboardMarkup:
+async def get_exercises_kb(pool: asyncpg.Pool, category: str) -> InlineKeyboardMarkup:
+    """Клавиатура выбора упражнений"""
     async with pool.acquire() as conn:
-        exercises = await conn.fetch("SELECT name FROM exercise_types WHERE category = 'cardio'")
+        exercises = await conn.fetch(
+            "SELECT id, name FROM exercise_types WHERE category = $1", category
+        )
 
-    builder = ReplyKeyboardBuilder()
+    builder = InlineKeyboardBuilder()
     for ex in exercises:
-        builder.button(text=ex["name"])
-    builder.button(text="❌ Отмена")
+        builder.add(InlineKeyboardButton(text=ex["name"], callback_data=f"exercise:{ex['id']}"))
+    builder.add(InlineKeyboardButton(text="❌ Отмена", callback_data="cancel"))
     builder.adjust(2)
-    return builder.as_markup(
-        resize_keyboard=True, input_field_placeholder="Выберите кардио-упражнение..."
+    return builder.as_markup()
+
+
+def get_number_input_kb(param_name: str, current_value: int = 0) -> InlineKeyboardMarkup:
+    """Клавиатура для ввода числовых значений"""
+    builder = InlineKeyboardBuilder()
+
+    # Кнопки изменения значения
+    for delta in [-10, -5, -1, +1, +5, +10]:
+        builder.add(
+            InlineKeyboardButton(text=f"{delta:+}", callback_data=f"adjust:{param_name}:{delta}")
+        )
+
+    # Кнопка подтверждения
+    builder.add(
+        InlineKeyboardButton(
+            text=f"✅ Подтвердить ({current_value})", callback_data=f"confirm_value:{param_name}"
+        )
     )
 
+    builder.adjust(3, 3, 1)
+    return builder.as_markup()
 
-async def get_strength_exercises(pool: asyncpg.Pool) -> ReplyKeyboardMarkup:
-    async with pool.acquire() as conn:
-        exercises = await conn.fetch("SELECT name FROM exercise_types WHERE category = 'strength'")
 
-    builder = ReplyKeyboardBuilder()
-    for ex in exercises:
-        builder.button(text=ex["name"])
-    builder.button(text="❌ Отмена")
-    builder.adjust(2)
-    return builder.as_markup(
-        resize_keyboard=True, input_field_placeholder="Выберите силовое упражнение..."
+def get_confirmation_kb() -> InlineKeyboardMarkup:
+    """Клавиатура подтверждения упражнения"""
+    builder = InlineKeyboardBuilder()
+    builder.add(
+        InlineKeyboardButton(text="✅ Подтвердить", callback_data="confirm_exercise"),
+        InlineKeyboardButton(text="✏️ Редактировать", callback_data="edit_exercise"),
+        InlineKeyboardButton(text="❌ Отменить", callback_data="cancel"),
     )
+    builder.adjust(2, 1)
+    return builder.as_markup()
 
 
-def speed_keyboard() -> ReplyKeyboardMarkup:
-    builder = ReplyKeyboardBuilder()
-    builder.button(text="8.5")
-    builder.button(text="10.0")
-    builder.button(text="12.5")
-    builder.button(text="15.0")
-    builder.button(text="❌ Отмена")
-    builder.adjust(2)
-    return builder.as_markup(
-        resize_keyboard=True, input_field_placeholder="Выберите или введите скорость..."
+def get_add_another_kb() -> InlineKeyboardMarkup:
+    """Клавиатура для добавления нового упражнения"""
+    builder = InlineKeyboardBuilder()
+    builder.add(
+        InlineKeyboardButton(text="➕ Добавить упражнение", callback_data="add_another"),
+        InlineKeyboardButton(text="✅ Завершить тренировку", callback_data="finish_workout"),
+        InlineKeyboardButton(text="❌ Отменить", callback_data="cancel"),
     )
+    builder.adjust(1, 1, 1)
+    return builder.as_markup()

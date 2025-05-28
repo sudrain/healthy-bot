@@ -2,6 +2,7 @@ from aiogram import F, Router, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from keyboards.keyboards import main_menu
 from states import WorkoutForm
 
@@ -25,22 +26,6 @@ async def cancel_command(message: types.Message, state: FSMContext):
     )
 
 
-@user_router.message(F.text.lower() == "➕ добавить тренировку")
-async def add_workout_button(message: types.Message, state: FSMContext):
-    await message.answer("Запуск добавления тренировки...")
-    await state.set_state(WorkoutForm.select_workout_type)
-    await message.answer(
-        "Выберите тип тренировки:",
-        reply_markup=types.ReplyKeyboardMarkup(
-            keyboard=[
-                [types.KeyboardButton(text="Силовая")],
-                [types.KeyboardButton(text="Кардио")],
-            ],
-            resize_keboard=True,
-        ),
-    )
-
-
 @user_router.message(F.text.lower() == "📊 аналитика")
 async def analytics_button(message: types.Message):
     markup = InlineKeyboardMarkup(
@@ -51,3 +36,11 @@ async def analytics_button(message: types.Message):
         ]
     )
     await message.answer("📈 Выберите тип аналитики:", reply_markup=markup)
+
+
+@user_router.message(F.text.lower() == "➕ добавить тренировку")
+async def start_workout(message: types.Message, state: FSMContext):
+    builder = InlineKeyboardBuilder()
+    builder.button(text="➕ Начать тренировку", callback_data="add_workout")
+    await state.set_state(WorkoutForm.select_workout_type)
+    await message.answer("Выберите действие:", reply_markup=builder.as_markup())
