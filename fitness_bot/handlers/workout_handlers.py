@@ -179,27 +179,13 @@ async def process_strength_reps(message: types.Message, state: FSMContext):
 
 
 @workout_router.message(WorkoutForm.strength_weight)
-async def process_strength_weight(message: types.Message, state: FSMContext):
+async def process_strength_weight(message: types.Message, state: FSMContext, pool: asyncpg.Pool):
+    data = await state.get_data()
     if not message.text.isdigit():
         await message.answer("❌ Введите вес в числовом значении!")
         return
 
     await state.update_data(weight=float(message.text))
-    await message.answer(
-        "⏳ Введите время отдыха после упражнения (минуты):", reply_markup=keyboards.cancel_button()
-    )
-    await state.set_state(WorkoutForm.strength_rest)
-
-
-# ----------------------------------------
-#    Общий обработчик отдыха(переделать)
-# ----------------------------------------
-@workout_router.message(WorkoutForm.cardio_rest)
-@workout_router.message(WorkoutForm.strength_rest)
-async def process_rest_time(message: types.Message, state: FSMContext, pool: asyncpg.Pool):
-    data = await state.get_data()
-    await state.update_data(rest_time=int(message.text))
-
     # Получаем название упражнения из БД
     async with pool.acquire() as conn:
         exercise_name = await conn.fetchval(
@@ -219,6 +205,36 @@ async def process_rest_time(message: types.Message, state: FSMContext, pool: asy
     formatted_data = await format_workout_data(await state.get_data())
     await message.answer(formatted_data, reply_markup=confirm_keyboard)
     await state.set_state(WorkoutForm.confirm_data)
+
+
+# ----------------------------------------
+#    Общий обработчик отдыха(переделать)
+# ----------------------------------------
+# @workout_router.message(WorkoutForm.cardio_rest)
+# @workout_router.message(WorkoutForm.strength_rest)
+# async def process_rest_time(message: types.Message, state: FSMContext, pool: asyncpg.Pool):
+#     data = await state.get_data()
+#     await state.update_data(rest_time=int(message.text))
+
+#     # Получаем название упражнения из БД
+#     async with pool.acquire() as conn:
+#         exercise_name = await conn.fetchval(
+#             "SELECT name FROM exercise_types WHERE id = $1", data["exercise_id"]
+#         )
+
+#     await state.update_data(exercise_name=exercise_name)
+
+#     # Формируем клавиатуру подтверждения
+#     confirm_keyboard = InlineKeyboardMarkup(
+#         inline_keyboard=[
+#             [InlineKeyboardButton(text="✅ Подтвердить", callback_data="confirm")],
+#             [InlineKeyboardButton(text="❌ Отменить", callback_data="cancel")],
+#         ]
+#     )
+
+#     formatted_data = await format_workout_data(await state.get_data())
+#     await message.answer(formatted_data, reply_markup=confirm_keyboard)
+#     await state.set_state(WorkoutForm.confirm_data)
 
 
 @workout_router.callback_query(WorkoutForm.confirm_data, F.data.in_(["confirm", "cancel"]))
@@ -247,7 +263,6 @@ async def handle_confirmation(callback: types.CallbackQuery, state: FSMContext, 
                             distance=data["distance"],
                             avg_speed=data["avg_speed"],
                             heart_rate=data["avg_heart_rate"],
-                            rest_time=data["rest_time"],  # Брать из data, а не message.text
                         )
                     else:
                         await create_strength_session(  # Исправлено на strength
@@ -256,7 +271,6 @@ async def handle_confirmation(callback: types.CallbackQuery, state: FSMContext, 
                             exercise_id=data["exercise_id"],
                             reps=data["reps"],
                             weight=data["weight"],
-                            rest_time=data["rest_time"],
                         )
 
             await callback.message.answer("✅ Данные успешно сохранены!")
@@ -283,7 +297,6 @@ async def format_workout_data(data: dict) -> str:
             f"📏 Расстояние: {data['distance']} км\n"
             f"📈 Средняя скорость: {data['avg_speed']} км/ч\n"
             f"❤️ Средний пульс: {data['avg_heart_rate']} уд/мин\n"
-            f"⏳ Время отдыха: {data['rest_time']} мин"
         )
     else:
         return (
@@ -291,5 +304,4 @@ async def format_workout_data(data: dict) -> str:
             f"🏋️ Упражнение: {data['exercise_name']}\n"
             f"🔢 Повторения: {data['reps']}\n"
             f"🏋️ Вес: {data['weight']} кг\n"
-            f"⏳ Время отдыха: {data['rest_time']} мин"
         )

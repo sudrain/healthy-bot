@@ -34,20 +34,18 @@ async def create_cardio_session(
     distance: float,
     avg_speed: float,
     heart_rate: int,
-    rest_time: int,
 ) -> None:
     await conn.execute(
         """INSERT INTO cardio_sessions
         (workout_id, exercise_type_id, duration, distance,
-         avg_speed, avg_heart_rate, rest_time)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+         avg_speed, avg_heart_rate)
+        VALUES ($1, $2, $3, $4, $5, $6)""",
         workout_id,
         exercise_id,
         duration,
         distance,
         avg_speed,
         heart_rate,
-        rest_time,
     )
 
 
@@ -57,15 +55,13 @@ async def create_strength_session(
     exercise_id: int,
     reps: int,
     weight: float,
-    rest_time: int,
 ) -> None:
     await conn.execute(
         """INSERT INTO strength_sessions
-        (workout_id, exercise_type_id, reps, weight, rest_time)
-        VALUES ($1, $2, $3, $4, $5)""",
+        (workout_id, exercise_type_id, reps, weight)
+        VALUES ($1, $2, $3, $4)""",
         workout_id,
         exercise_id,
         reps,
         weight,
-        rest_time,
     )
